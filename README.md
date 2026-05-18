@@ -2,7 +2,7 @@
 
 A companion artifact for this month's book club reading on clocks, longitude, and the making of modern time. Built to sit alongside five précis as a single visual map of the period.
 
-**Live timeline:** https://smsteven8.github.io/time-books-timeline/
+**Live timeline:** https://smsteven8.github.io/time_books_timeline/
 
 ## What it is
 
