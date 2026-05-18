@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Time Books — Interactive Timeline</title>
+<style>
+  :root {
+    --charcoal: #2d2d2d;
+    --slate-blue: #5b7a9d;
+    --terracotta: #c4704e;
+    --gold: #b89a3e;
+    --gray: #6b6b6b;
+    --gray-light: #d8d2c5;
+    --ivory: #f0ebe3;
+    --ivory-dark: #e8e2d4;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 2rem;
+    font-family: Georgia, 'Times New Roman', serif;
+    background: var(--ivory);
+    color: var(--charcoal);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.75rem;
+    margin: 0 0 0.25rem 0;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    margin: 0 0 1.5rem 0;
+    font-style: italic;
+    color: var(--gray);
+    font-size: 1rem;
+  }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--gray-light);
+  }
+  .filters {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .filters label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    user-select: none;
+  }
+  .filters input[type=checkbox] { cursor: pointer; }
+  .swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .sw-landes { background: var(--slate-blue); }
+  .sw-sobel { background: var(--terracotta); }
+  .sw-wulf { background: var(--gold); }
+  .sw-scaffold { background: var(--gray); }
+  .zooms {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+  }
+  .zooms button {
+    font-family: inherit;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.85rem;
+    background: var(--ivory-dark);
+    border: 1px solid var(--gray-light);
+    color: var(--charcoal);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .zooms button:hover {
+    background: var(--charcoal);
+    color: var(--ivory);
+    border-color: var(--charcoal);
+  }
+  .zooms button.active {
+    background: var(--slate-blue);
+    color: var(--ivory);
+    border-color: var(--slate-blue);
+  }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+  }
+  #timeline-container {
+    background: var(--ivory-dark);
+    border-radius: 4px;
+    padding: 1rem;
+    overflow: hidden;
+    position: relative;
+  }
+  #timeline {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .lane-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .lane-sub {
+    font-size: 10px;
+    fill: var(--gray);
+    font-style: italic;
+  }
+  .axis-tick { stroke: var(--gray-light); stroke-width: 1; }
+  .axis-tick-major { stroke: var(--gray); stroke-width: 1; }
+  .axis-label {
+    font-size: 10px;
+    fill: var(--gray);
+    text-anchor: middle;
+  }
+  .event-dot {
+    cursor: pointer;
+    transition: opacity 0.2s, r 0.15s;
+  }
+  .event-dot.dimmed { opacity: 0.1; pointer-events: none; }
+  .event-dot.selected { stroke: var(--charcoal); stroke-width: 2; }
+  .anchor-label {
+    font-size: 9px;
+    text-anchor: middle;
+    pointer-events: none;
+    font-style: italic;
+  }
+  .transit-band { fill: var(--gold); opacity: 0.07; }
+  #tooltip {
+    position: absolute;
+    background: var(--charcoal);
+    color: var(--ivory);
+    padding: 0.5rem 0.7rem;
+    border-radius: 3px;
+    font-size: 0.82rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    max-width: 260px;
+    z-index: 10;
+    line-height: 1.35;
+    font-family: Georgia, serif;
+  }
+  #tooltip .tt-year {
+    color: var(--gold);
+    font-size: 0.74rem;
+    font-style: italic;
+    margin-bottom: 0.2rem;
+  }
+  #detail-panel {
+    background: var(--ivory-dark);
+    border-radius: 4px;
+    padding: 1.25rem;
+    min-height: 240px;
+  }
+  #detail-panel .hint {
+    color: var(--gray);
+    font-style: italic;
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.5;
+  }
+  #detail-panel .d-year {
+    font-size: 0.85rem;
+    color: var(--gray);
+    font-style: italic;
+    margin-bottom: 0.25rem;
+  }
+  #detail-panel .d-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 0.6rem 0;
+    line-height: 1.3;
+  }
+  #detail-panel .d-source {
+    display: inline-block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 2px;
+    color: var(--ivory);
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+  #detail-panel .d-source.landes { background: var(--slate-blue); }
+  #detail-panel .d-source.sobel { background: var(--terracotta); }
+  #detail-panel .d-source.wulf { background: var(--gold); }
+  #detail-panel .d-source.scaffold { background: var(--gray); }
+  #detail-panel .d-desc {
+    font-size: 0.93rem;
+    line-height: 1.55;
+    margin: 0;
+  }
+  footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--gray-light);
+    font-size: 0.8rem;
+    color: var(--gray);
+    font-style: italic;
+  }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .controls { flex-direction: column; align-items: flex-start; }
+    .zooms { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Time Books — Interactive Timeline</h1>
+    <p class="subtitle">Landes · Sobel · Wulf, with 18th-century scientific scaffolding · Cosmographic palette</p>
+    <div class="controls">
+      <div class="filters">
+        <label><input type="checkbox" checked data-source="landes"><span class="swatch sw-landes"></span>Landes</label>
+        <label><input type="checkbox" checked data-source="sobel"><span class="swatch sw-sobel"></span>Sobel</label>
+        <label><input type="checkbox" checked data-source="wulf"><span class="swatch sw-wulf"></span>Wulf</label>
+        <label><input type="checkbox" checked data-source="scaffold"><span class="swatch sw-scaffold"></span>Scaffolding</label>
+      </div>
+      <div class="zooms">
+        <button data-zoom="full" class="active">Full view</button>
+        <button data-zoom="century">18th century</button>
+        <button data-zoom="transit">Transit window</button>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div id="timeline-container">
+      <svg id="timeline" viewBox="0 0 1400 480" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="tooltip"></div>
+    </div>
+    <aside id="detail-panel">
+      <p class="hint">Hover an event for a brief view; click to pin its details here. Use the filters to isolate a single book's events, and the zoom buttons to focus on the eighteenth century or the transit window.</p>
+    </aside>
+  </main>
+  <footer>
+    Companion to the Time Books précis cluster. Lanes top-to-bottom: Landes (clock evolution), Sobel (longitude), Wulf (transits), scientific scaffolding. The faint gold band marks the 1761–1769 transit window when in view.
+  </footer>
+  <script>
+    const EVENTS = [
+      // LANDES — clock evolution
+      { year: 1090, source: 'landes', title: "Su Sung's astronomical water clock",
+        description: "Chinese imperial water-clock with armillary sphere and chain-drive escapement. The comparison case Landes uses to frame his China–Europe question: technically advanced for its time, but remained an imperial curiosity rather than civic infrastructure. The single non-European anchor on this timeline." },
+      { year: 1283, source: 'landes', title: "First mechanical clock in England",
+        description: "Approximate date of the earliest documented mechanical clock at Dunstable Priory. The verge-and-foliot escapement enables truly mechanical (rather than water-driven) timekeeping. Monastic at first — regulating the canonical hours that Landes treats as the prototype of disciplined temporal partition." },
+      { year: 1335, source: 'landes', title: "Public clock, Milan",
+        description: "One of the first public mechanical clocks installed in a civic tower. The bell-tower clock becomes a defining feature of European urban life, regulating markets, work, and city gates. Time-discipline moves from monastery to marketplace." },
+      { year: 1364, source: 'landes', title: "Giovanni de' Dondi's astrarium",
+        description: "Astonishingly sophisticated astronomical clock displaying planetary positions, lunar cycle, and saint's days. A virtuoso object demonstrating the cultural prestige of mechanical timekeeping in late-medieval Italy." },
+      { year: 1410, source: 'landes', title: "Prague astronomical clock (Orloj)",
+        description: "Installed on the Old Town Hall. Combines mechanical clockwork with astronomical display, calendar, and ritual procession. A civic landmark of long duration." },
+      { year: 1510, source: 'landes', title: "Henlein's 'Nuremberg eggs'",
+        description: "Peter Henlein produces small spring-driven portable timepieces — the prehistory of the watch. Timekeeping becomes personal possession, not merely civic infrastructure." },
+      { year: 1582, source: 'landes', title: "Galileo and the isochronous pendulum",
+        description: "Galileo observes that a pendulum's period is approximately independent of its amplitude. The foundation for the pendulum clock, which becomes the most accurate timekeeping technology of the next three centuries." },
+      { year: 1656, source: 'landes', title: "Huygens' pendulum clock",
+        description: "Christiaan Huygens designs the first practical pendulum clock, achieving accuracy of seconds per day rather than minutes. The precision revolution begins." },
+      { year: 1675, source: 'landes', title: "Balance spring (Huygens / Hooke)",
+        description: "The balance spring gives the balance wheel a restoring force, making accurate portable timepieces possible. Sets up the next century of precision watchmaking. Priority dispute between Huygens and Hooke." },
+      { year: 1810, source: 'landes', title: "Breguet's tourbillon",
+        description: "Abraham-Louis Breguet patents the tourbillon, a rotating escapement cage that averages out the effects of gravity on a pocket watch. The high-water mark of mechanical haute horlogerie." },
+      { year: 1854, source: 'landes', title: "American Watch Company (Waltham)",
+        description: "Industrial production of watches using interchangeable parts. The first true mass-production of precision instruments. Watches move from luxury good to mass consumer object." },
+      { year: 1883, source: 'landes', title: "US railroad standard time zones",
+        description: "American railroads adopt the four-zone standard time system. The civilizational requirement for synchronized time across vast distances drives the abstraction of local time into uniform zones — Zerubavel's sociotemporality at industrial scale." },
+      { year: 1969, source: 'landes', title: "Seiko Astron quartz wristwatch",
+        description: "First commercial quartz wristwatch. Crystal oscillator timekeeping accurate to seconds per month rather than per day. The disruption that nearly ends Swiss mechanical watchmaking." },
+      { year: 1978, source: 'landes', title: "Swiss quartz crisis (peak)",
+        description: "Swiss watch employment collapses from roughly 90,000 to 30,000. Surviving Swiss firms reorganize around luxury mechanical watches, ceding commodity timekeeping to Japanese electronics. A textbook profit-migration up the value stack." },
+
+      // SOBEL — longitude
+      { year: 1707, source: 'sobel', title: "Scilly naval disaster",
+        description: "Admiral Sir Cloudesley Shovell's fleet runs aground on the Scilly Isles in fog due to longitude miscalculation. Four ships lost, roughly two thousand dead. The disaster that makes longitude a national priority." },
+      { year: 1714, source: 'sobel', title: "Longitude Act passed",
+        description: "Parliament offers up to £20,000 for a method determining longitude to within half a degree after a transatlantic voyage. Establishes the Board of Longitude. The prize John Harrison will spend the next half-century pursuing." },
+      { year: 1730, source: 'sobel', title: "Harrison submits first plans",
+        description: "John Harrison, a self-taught Yorkshire carpenter and clockmaker, travels to London and presents plans for a marine timekeeper. Receives initial funding from the Board of Longitude." },
+      { year: 1735, source: 'sobel', title: "H1 completed",
+        description: "Harrison's first marine timekeeper: massive (~75 lbs), brass and wood, with grasshopper escapements and counterbalanced motion to compensate for ship's roll. Genuinely innovative, conceptually still a clock." },
+      { year: 1736, source: 'sobel', title: "H1 sea trial to Lisbon",
+        description: "H1 performs creditably on a voyage to Lisbon and back. The Board awards further funds, though the trial is not on the Act's specified Caribbean route." },
+      { year: 1741, source: 'sobel', title: "H2 completed",
+        description: "Harrison's second timekeeper. Refined but never sea-tested — Harrison discovers a fundamental flaw before testing and moves on to H3." },
+      { year: 1759, source: 'sobel', title: "H3 completed (after 19 years)",
+        description: "Harrison's third timekeeper, the product of nearly two decades of refinement. Includes the first bimetallic temperature compensation and caged roller bearings. Still doesn't satisfy Harrison." },
+      { year: 1759.5, source: 'sobel', title: "H4 — the breakthrough",
+        description: "A five-inch silver pocket watch. Harrison realizes the answer is not a bigger sea-clock but a smaller, faster-beating watch. H4 violates every previous assumption about marine timekeepers and is the answer. The breakthrough is by re-categorization." },
+      { year: 1761, source: 'sobel', title: "H4 voyage to Jamaica",
+        description: "William Harrison sails to Jamaica with H4. On arrival the watch is within five seconds — easily meeting the Longitude Act's tightest accuracy threshold. The Board demands further trials anyway." },
+      { year: 1764, source: 'sobel', title: "Second sea trial (Barbados)",
+        description: "H4 sails to Barbados, again performing within prize-winning accuracy. The Board still refuses to award the prize, demanding that Harrison surrender the watch and explain its mechanism." },
+      { year: 1765, source: 'sobel', title: "Harrison receives half the prize",
+        description: "After surrendering H4 and explaining its mechanism, Harrison receives £10,000 — half the prize. The remainder is conditioned on further proofs the Board and Maskelyne keep moving." },
+      { year: 1772, source: 'sobel', title: "K1 sails with Cook on Resolution",
+        description: "Larcum Kendall's K1, a faithful copy of H4 commissioned by the Board, accompanies Captain Cook on his second voyage (1772–75). It performs flawlessly. The chronometer's practical victory is no longer disputable." },
+      { year: 1773, source: 'sobel', title: "King George III intervenes",
+        description: "Aged 80, having appealed personally to King George III, Harrison receives the balance of his prize money — though the Longitude Prize itself is never formally awarded. Vindication without resolution." },
+      { year: 1776, source: 'sobel', title: "John Harrison dies",
+        description: "Harrison dies at age 83 in London. His chronometers are eventually displayed at the Royal Observatory Greenwich, where they still run." },
+
+      // WULF — transits of Venus
+      { year: 1639, source: 'wulf', title: "First recorded transit of Venus",
+        description: "Jeremiah Horrocks and William Crabtree observe the December 1639 transit — the first ever recorded. Horrocks dies aged 22 two years later; Crabtree's notes survive. The precondition for everything Halley will propose." },
+      { year: 1716, source: 'wulf', title: "Halley's transit-timing proposal",
+        description: "Edmond Halley publishes his detailed proposal in Philosophical Transactions: timing the transit from widely separated latitudes will yield the astronomical unit to unprecedented accuracy. He knows he will not live to see it tested." },
+      { year: 1742, source: 'wulf', title: "Halley dies",
+        description: "Halley dies, nineteen years before his proposal can be carried out. The international expedition planning continues without him — the first deliberately multi-generational scientific project." },
+      { year: 1760, source: 'wulf', title: "Expedition departures for 1761 transit",
+        description: "Le Gentil sails for Pondicherry; Mason and Dixon head for Sumatra (their ship is attacked; they redirect to the Cape); Maximilian Hell prepares for Vardø in the Arctic; Chappe heads for Tobolsk in Siberia. The first deliberately global scientific collaboration is underway during the Seven Years' War." },
+      { year: 1761, source: 'wulf', title: "Transit of Venus, June 6",
+        description: "First transit observation. Mixed results due to weather, war, the 'black drop effect,' and Le Gentil's spectacular bad luck — he reached Pondicherry but the city had fallen to the British, and he observed from the ship, where rolling motion ruined his timings." },
+      { year: 1761.5, source: 'wulf', title: "Lomonosov infers Venus's atmosphere",
+        description: "From St. Petersburg, Mikhail Lomonosov observes a thin ring of refraction at ingress and egress and correctly infers that Venus has an atmosphere. An incidental but profound discovery from the transit project." },
+      { year: 1768, source: 'wulf', title: "Cook departs on Endeavour",
+        description: "Captain James Cook sets sail on his first voyage — formally an astronomy expedition to observe the 1769 transit from Tahiti. Royal Society astronomer Charles Green and naturalist Joseph Banks are aboard." },
+      { year: 1769, source: 'wulf', title: "Transit of Venus, June 3 (Cook at Tahiti)",
+        description: "Second transit. Cook and Green observe from Tahiti's 'Point Venus.' Better-organized than 1761, but still plagued by the black drop effect. Le Gentil, having waited eight years in India, is clouded out at the critical moment." },
+      { year: 1771, source: 'wulf', title: "Le Gentil returns home",
+        description: "Eleven years after departing, Le Gentil returns to France to find he has been declared legally dead, his wife remarried, his estate seized. The human cost of the project is most concentrated in his story." },
+      { year: 1824, source: 'wulf', title: "Encke's definitive AU calculation",
+        description: "Johann Franz Encke publishes his final reduction of the combined 1761/1769 transit data, yielding an astronomical unit of roughly 153 million km (modern value ≈149.6 million km). The project's payoff, decades after the events." },
+
+      // SCAFFOLDING — 18th-century scientific context
+      { year: 1543, source: 'scaffold', title: "Copernicus, De Revolutionibus",
+        description: "Heliocentric model published in the year of Copernicus's death. The cosmological precondition for Halley's transit-timing logic, which assumes Venus orbits the Sun." },
+      { year: 1610, source: 'scaffold', title: "Galileo, Sidereus Nuncius",
+        description: "Telescopic observations of Jupiter's moons, lunar geography, and the Milky Way. The instrumental precondition for everything in this period — astronomy without telescopes can't time transits." },
+      { year: 1675, source: 'scaffold', title: "Royal Observatory founded at Greenwich",
+        description: "Charles II founds the Observatory specifically to address the longitude problem via astronomical methods. The institutional home of the lunar-distance method — and later of Nevil Maskelyne." },
+      { year: 1687, source: 'scaffold', title: "Newton, Principia",
+        description: "Mathematical foundation for celestial mechanics. Without Newton, neither Halley's accurate transit predictions nor the analysis of transit data would be possible. Lurks behind every event in this period." },
+      { year: 1731, source: 'scaffold', title: "Hadley's octant",
+        description: "John Hadley's reflecting octant — precursor of the marine sextant. Makes accurate angular measurements at sea possible, including the lunar-distance measurements that compete with Harrison's chronometer." },
+      { year: 1755, source: 'scaffold', title: "Mayer's lunar tables",
+        description: "Tobias Mayer's tabulations of the Moon's predicted position, accurate enough to make the lunar-distance method of finding longitude practical. The data foundation for Maskelyne's method — the chronometer's chief rival." },
+      { year: 1758, source: 'scaffold', title: "Dollond's achromatic refractor",
+        description: "John Dollond patents the achromatic lens, dramatically reducing chromatic aberration. Essential for the precision required to time a transit ingress to seconds." },
+      { year: 1766, source: 'scaffold', title: "Nautical Almanac first published",
+        description: "Nevil Maskelyne, Astronomer Royal, publishes the first edition (for year 1767). The infrastructure that makes lunar-distance navigation practical for trained navigators — and Maskelyne's deepest institutional stake in the longitude debate." },
+      { year: 1772, source: 'scaffold', title: "Cook's second voyage (Resolution)",
+        description: "Cook's second voyage carries K1 (Kendall's copy of H4). Cook's later endorsement of K1 — 'our trusty friend the Watch' — is what finally settles the chronometer's superiority in practice." }
+    ];
+
+    const SOURCES = {
+      landes:   { color: '#5b7a9d', lane: 0 },
+      sobel:    { color: '#c4704e', lane: 1 },
+      wulf:     { color: '#b89a3e', lane: 2 },
+      scaffold: { color: '#6b6b6b', lane: 3 }
+    };
+
+    const SOURCE_LABELS = {
+      landes:   { name: 'LANDES',       sub: 'clock evolution' },
+      sobel:    { name: 'SOBEL',        sub: 'longitude' },
+      wulf:     { name: 'WULF',         sub: 'transits of Venus' },
+      scaffold: { name: 'SCAFFOLDING',  sub: '18th-c. context' }
+    };
+
+    const ZOOMS = {
+      full:    [1080, 2000],
+      century: [1700, 1810],
+      transit: [1700, 1780]
+    };
+
+    const ANCHOR_YEARS = new Set([1714, 1761, 1769, 1773]);
+
+    let viewRange = [...ZOOMS.full];
+    let activeFilters = new Set(['landes', 'sobel', 'wulf', 'scaffold']);
+    let selectedEventIdx = null;
+
+    const svg       = document.getElementById('timeline');
+    const tooltip   = document.getElementById('tooltip');
+    const detail    = document.getElementById('detail-panel');
+    const container = document.getElementById('timeline-container');
+
+    const W = 1400, H = 480;
+    const MG = { top: 30, right: 60, bottom: 50, left: 110 };
+    const PW = W - MG.left - MG.right;
+    const PH = H - MG.top - MG.bottom;
+    const LANE_H = PH / 4;
+    const LANE_Y = i => MG.top + LANE_H * i + LANE_H / 2;
+    const NS = 'http://www.w3.org/2000/svg';
+
+    function yearToX(y) {
+      const [s, e] = viewRange;
+      return MG.left + ((y - s) / (e - s)) * PW;
+    }
+
+    function makeTicks(start, end) {
+      const span = end - start;
+      let step;
+      if (span > 500) step = 100;
+      else if (span > 200) step = 50;
+      else if (span > 80) step = 10;
+      else step = 5;
+      const ticks = [];
+      const startTick = Math.ceil(start / step) * step;
+      for (let y = startTick; y <= end; y += step) ticks.push(y);
+      return { ticks, step };
+    }
+
+    function el(name, attrs) {
+      const n = document.createElementNS(NS, name);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      return n;
+    }
+
+    function render() {
+      svg.innerHTML = '';
+
+      // Lane stripes (alternating)
+      for (let i = 0; i < 4; i++) {
+        svg.appendChild(el('rect', {
+          x: MG.left, y: MG.top + LANE_H * i,
+          width: PW, height: LANE_H,
+          fill: i % 2 ? '#f0ebe3' : '#e8e2d4',
+          opacity: 0.5
+        }));
+        svg.appendChild(el('line', {
+          x1: MG.left, x2: MG.left + PW,
+          y1: LANE_Y(i), y2: LANE_Y(i),
+          stroke: '#d8d2c5', 'stroke-width': 1
+        }));
+      }
+
+      // Lane labels
+      Object.entries(SOURCE_LABELS).forEach(([src, lbl]) => {
+        const lane = SOURCES[src].lane;
+        const tName = el('text', {
+          x: MG.left - 12, y: LANE_Y(lane) - 4,
+          'text-anchor': 'end',
+          class: 'lane-label',
+          fill: SOURCES[src].color
+        });
+        tName.textContent = lbl.name;
+        svg.appendChild(tName);
+
+        const tSub = el('text', {
+          x: MG.left - 12, y: LANE_Y(lane) + 10,
+          'text-anchor': 'end',
+          class: 'lane-sub'
+        });
+        tSub.textContent = lbl.sub;
+        svg.appendChild(tSub);
+      });
+
+      // Transit-window band
+      const [vs, ve] = viewRange;
+      if (vs <= 1761 && ve >= 1769) {
+        svg.appendChild(el('rect', {
+          x: yearToX(1761), y: MG.top,
+          width: yearToX(1769) - yearToX(1761),
+          height: PH,
+          class: 'transit-band'
+        }));
+      }
+
+      // Year axis
+      const { ticks, step } = makeTicks(vs, ve);
+      const axisY = MG.top + PH + 8;
+      svg.appendChild(el('line', {
+        x1: MG.left, x2: MG.left + PW,
+        y1: axisY, y2: axisY,
+        stroke: '#6b6b6b', 'stroke-width': 1
+      }));
+      ticks.forEach(y => {
+        if (y < vs || y > ve) return;
+        const x = yearToX(y);
+        svg.appendChild(el('line', {
+          x1: x, x2: x, y1: axisY, y2: axisY + 5,
+          class: step >= 50 ? 'axis-tick-major' : 'axis-tick'
+        }));
+        const t = el('text', { x: x, y: axisY + 18, class: 'axis-label' });
+        t.textContent = y;
+        svg.appendChild(t);
+      });
+
+      // Events
+      EVENTS.forEach((ev, idx) => {
+        const y = ev.year;
+        if (y < vs || y > ve) return;
+        const x = yearToX(y);
+        const lane = SOURCES[ev.source].lane;
+        const cy = LANE_Y(lane);
+        const isScaffold = ev.source === 'scaffold';
+        const dimmed = !activeFilters.has(ev.source);
+
+        const dot = el('circle', {
+          cx: x, cy: cy,
+          r: isScaffold ? 3.5 : 5,
+          fill: SOURCES[ev.source].color,
+          class: 'event-dot'
+            + (dimmed ? ' dimmed' : '')
+            + (selectedEventIdx === idx ? ' selected' : ''),
+          'data-idx': idx
+        });
+        svg.appendChild(dot);
+
+        // Anchor labels for major years
+        if (ANCHOR_YEARS.has(Math.floor(y)) && !dimmed) {
+          const lbl = el('text', {
+            x: x, y: cy - 11,
+            class: 'anchor-label',
+            fill: SOURCES[ev.source].color
+          });
+          lbl.textContent = Math.floor(y);
+          svg.appendChild(lbl);
+        }
+      });
+
+      // Attach handlers
+      svg.querySelectorAll('.event-dot').forEach(d => {
+        d.addEventListener('mouseenter', onEnter);
+        d.addEventListener('mouseleave', onLeave);
+        d.addEventListener('mousemove', onMove);
+        d.addEventListener('click', onClick);
+      });
+    }
+
+    function formatYear(y) {
+      const yr = Math.floor(y);
+      return Math.abs(y - yr - 0.5) < 0.01 ? `${yr} (later that year)` : String(yr);
+    }
+
+    function onEnter(e) {
+      const ev = EVENTS[+e.target.getAttribute('data-idx')];
+      tooltip.innerHTML =
+        `<div class="tt-year">${formatYear(ev.year)}</div><div>${ev.title}</div>`;
+      tooltip.style.opacity = '1';
+    }
+
+    function onMove(e) {
+      const r = container.getBoundingClientRect();
+      let x = e.clientX - r.left + 14;
+      let y = e.clientY - r.top + 14;
+      // Constrain to container
+      const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+      if (x + tw > r.width) x = e.clientX - r.left - tw - 14;
+      if (y + th > r.height) y = e.clientY - r.top - th - 14;
+      tooltip.style.left = x + 'px';
+      tooltip.style.top  = y + 'px';
+    }
+
+    function onLeave() { tooltip.style.opacity = '0'; }
+
+    function onClick(e) {
+      const idx = +e.target.getAttribute('data-idx');
+      selectedEventIdx = idx;
+      const ev = EVENTS[idx];
+      detail.innerHTML = `
+        <span class="d-source ${ev.source}">${SOURCE_LABELS[ev.source].name}</span>
+        <div class="d-year">${formatYear(ev.year)}</div>
+        <h3 class="d-title">${ev.title}</h3>
+        <p class="d-desc">${ev.description}</p>
+      `;
+      render();
+    }
+
+    document.querySelectorAll('.filters input').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const s = cb.dataset.source;
+        cb.checked ? activeFilters.add(s) : activeFilters.delete(s);
+        render();
+      });
+    });
+
+    document.querySelectorAll('.zooms button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        viewRange = [...ZOOMS[btn.dataset.zoom]];
+        document.querySelectorAll('.zooms button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        render();
+      });
+    });
+
+    render();
+  </script>
+</body>
+</html>
